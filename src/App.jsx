@@ -1,39 +1,76 @@
 import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+// 👇 Supabase接続
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY
+);
 
 function App() {
   const [task, setTask] = useState("");
   const [todos, setTodos] = useState([]);
 
-  // 初回読み込み
+  // 🔥 初回：DBから取得
   useEffect(() => {
-    const saved = localStorage.getItem("todos");
-    if (saved) {
-      setTodos(JSON.parse(saved));
-    }
+    fetchTodos();
   }, []);
 
-  // ★ 初回をスキップする
-  useEffect(() => {
-    if (todos.length === 0) return; // ←これ追加
+  const fetchTodos = async () => {
+    const { data, error } = await supabase
+      .from("todos")
+      .select("*")
+      .order("id", { ascending: true });
 
-    localStorage.setItem("todos", JSON.stringify(todos));
-  }, [todos]);
+    if (error) {
+      console.log(error);
+    } else {
+      setTodos(data);
+    }
+  };
 
-  const addTodo = () => {
+  // 🔥 追加（INSERT）
+  const addTodo = async () => {
     if (task.trim() === "") return;
-    setTodos([...todos, { text: task, done: false }]);
-    setTask("");
+
+    const { error } = await supabase
+      .from("todos")
+      .insert([{ title: task, done: false }]);
+
+    if (error) {
+      console.log(error);
+    } else {
+      setTask("");
+      fetchTodos(); // 再取得
+    }
   };
 
-  const toggleTodo = (index) => {
-    const newTodos = todos.map((todo, i) =>
-      i === index ? { ...todo, done: !todo.done } : todo
-    );
-    setTodos(newTodos);
+  // 🔥 更新（done切り替え）
+  const toggleTodo = async (todo) => {
+    const { error } = await supabase
+      .from("todos")
+      .update({ done: !todo.done })
+      .eq("id", todo.id);
+
+    if (error) {
+      console.log(error);
+    } else {
+      fetchTodos();
+    }
   };
 
-  const deleteTodo = (index) => {
-    setTodos(todos.filter((_, i) => i !== index));
+  // 🔥 削除（DELETE）
+  const deleteTodo = async (id) => {
+    const { error } = await supabase
+      .from("todos")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.log(error);
+    } else {
+      fetchTodos();
+    }
   };
 
   return (
@@ -49,19 +86,19 @@ function App() {
       <button onClick={addTodo}>追加</button>
 
       <ul>
-        {todos.map((todo, index) => (
-          <li key={index}>
+        {todos.map((todo) => (
+          <li key={todo.id}>
             <span
-              onClick={() => toggleTodo(index)}
+              onClick={() => toggleTodo(todo)}
               style={{
                 cursor: "pointer",
                 textDecoration: todo.done ? "line-through" : "none"
               }}
             >
-              {todo.text}
+              {todo.title}
             </span>
 
-            <button onClick={() => deleteTodo(index)}>削除</button>
+            <button onClick={() => deleteTodo(todo.id)}>削除</button>
           </li>
         ))}
       </ul>
